@@ -441,6 +441,11 @@ $(BROWSER_TEST_DYNAMIC)/.stamp-browser-test-dynamic-suite: packager.exe $(WASM_F
 	ninja -v -C obj/debugger-test-suite
 	touch $@
 
+.stamp-build-threaded-debugger-test-app: packager.exe binding_tests.dll debugger-test.dll debugger-driver.html
+	$(PACKAGER) --copy=always -debugrt -debug --threads --template=runtime.js --builddir=obj/debugger-test-suite --appdir=bin/debugger-test-suite --asset=debugger-driver.html debugger-test.dll
+	ninja -v -C obj/debugger-test-suite
+	touch $@
+
 build-aot-hello: packager.exe hello.exe
 	$(PACKAGER) --emscripten-sdkdir=$(EMSCRIPTEN_SDK_DIR) --mono-sdkdir=$(TOP)/sdks/out -appdir=bin/aot-hello --builddir=obj/aot-hello --aot --template=runtime-tests.js --pinvoke-libs=libfoo hello.exe
 	ninja -v -C obj/aot-hello
@@ -602,6 +607,7 @@ run-aot-all: build-aot-all
 rebuild-debug-sample: clean-debug-sample build-debug-sample
 
 build-debugger-test-app: .stamp-build-debugger-test-app
+build-threaded-debugger-test-app: .stamp-build-threaded-debugger-test-app
 build-managed: build-debug-sample build-test-suite
 
 build-dbg-proxy:
@@ -610,7 +616,7 @@ build-dbg-proxy:
 build-dbg-testsuite:
 	$(DOTNET_BUILD) DebuggerTestSuite
 
-build: build-native build-managed build-debugger-test-app
+build: build-native build-managed build-debugger-test-app build-threaded-debugger-test-app
 
 gen-pinvoke-tables:
 	mono ../../mcs/class/lib/wasm_tools/wasm-tuner.exe --gen-pinvoke-table System.Native $(WASM_BCL_DIR)/mscorlib.dll > src/pinvoke-tables-default.h
@@ -640,6 +646,9 @@ run-all-%:
 	$(MAKE) -C . run-jsc-$*
 
 run-debugger-tests: build-debugger-test-app build-dbg-testsuite
+	dotnet test DebuggerTestSuite
+
+run-threaded-debugger-tests: build-threaded-debugger-test-app build-dbg-testsuite
 	dotnet test DebuggerTestSuite
 
 run-browser-tests: build-browser-test-suite
@@ -741,6 +750,7 @@ check-aot: do-aot-hello
 clean-debug-sample:
 	$(RM) debug_sample/dotnet.js
 	$(RM) .stamp-build-debugger-test-app
+	$(RM) .stamp-build-threaded-debugger-test-app
 
 clean-sdk:
 	$(RM) -r sdk/**/bin
