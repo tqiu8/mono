@@ -124,6 +124,8 @@ namespace DebuggerTests
 			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
 			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+			"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+			"/usr/bin/google-chrome",
 			"/usr/bin/chromium",
 			"/usr/bin/chromium-browser",
 		};
