@@ -70,8 +70,7 @@ namespace DebuggerTests
             
             await Ready (threads: true);
             await insp.Ready ();
-            Assert.Contains ("dotnet://debugger-test.dll/debugger-test.cs", scripts.Values);
-			Assert.Contains ("dotnet://debugger-test.dll/debugger-test2.cs", scripts.Values);
+            Assert.Contains ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", scripts.Values);
 			Assert.Contains ("dotnet://Simple.Dependency.dll/dependency.cs", scripts.Values);
         }
 
@@ -174,7 +173,7 @@ namespace DebuggerTests
            await insp.Ready (async (cli, token) => {
                ctx = new DebugTestContext (cli, insp, token, scripts);
 
-               var debugger_test_loc = "dotnet://threaded-debugger-test.dll/debugger-test.cs";
+               var debugger_test_loc = "dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs";
                await SetBreakpoint (debugger_test_loc, 25, 2, ctx);
                await SetBreakpoint (debugger_test_loc, 32, 2, ctx);
                await SetBreakpoint (debugger_test_loc, 38, 2, ctx);
