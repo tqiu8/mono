@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.StaticFiles;
 using Newtonsoft.Json.Linq;
+using System.Text.RegularExpressions;
 
 namespace WebAssembly.Net.Debugging {
 	public class TestHarnessStartup {
@@ -79,10 +80,11 @@ namespace WebAssembly.Net.Debugging {
 					var str = e.Data;
 					Console.WriteLine ($"stderr: {str}");
 
-					if (str.Contains ("listening on", StringComparison.Ordinal)) {
-						var res = str.Substring (str.IndexOf ("ws://", StringComparison.Ordinal));
-						if (res != null)
-							tcs.TrySetResult (res);
+					if (str.Contains ("listening on w", StringComparison.Ordinal)) {
+                        var match = Regex.Match (str, @"listening on (ws?s://.*)");
+                       if (match != null) {
+                            tcs.TrySetResult (match.Groups[1].Captures[0].Value);
+                        }
 					}
 				};
 

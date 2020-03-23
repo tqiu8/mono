@@ -357,6 +357,9 @@ sample.dll: Simple.Dependency.dll sample.cs $(WASM_FRAMEWORK)/.stamp-framework
 debugger-test.dll: debugger-test.cs debugger-test2.cs Simple.Dependency.dll
 	$(CSC) $(CSC_FLAGS) /target:library -out:$@ /r:$(WASM_BCL_DIR)/mscorlib.dll /r:Simple.Dependency.dll debugger-test.cs debugger-test2.cs
 
+threaded-debugger-test.dll: threaded-debugger-test.cs Simple.Dependency.dll
+	$(CSC) $(CSC_FLAGS) /target:library -out:$@ /r:$(WASM_BCL_DIR)/mscorlib.dll /r:Simple.Dependency.dll threaded-debugger-test.cs
+
 OPTIONS_CS = $(TOP)/mcs/class/Mono.Options/Mono.Options/Options.cs
 
 Mono.Cecil.dll: $(TOP)/mcs/class/lib/wasm_tools/Mono.Cecil.dll
@@ -441,9 +444,9 @@ $(BROWSER_TEST_DYNAMIC)/.stamp-browser-test-dynamic-suite: packager.exe $(WASM_F
 	ninja -v -C obj/debugger-test-suite
 	touch $@
 
-.stamp-build-threaded-debugger-test-app: packager.exe binding_tests.dll debugger-test.dll debugger-driver.html
-	$(PACKAGER) --copy=always -debugrt -debug --threads --template=runtime.js --builddir=obj/debugger-test-suite --appdir=bin/debugger-test-suite --asset=debugger-driver.html debugger-test.dll
-	ninja -v -C obj/debugger-test-suite
+.stamp-build-threaded-debugger-test-app: packager.exe binding_tests.dll threaded-debugger-test.dll threaded-debugger-driver.html
+	$(PACKAGER) --copy=always -debugrt -debug --threads --template=runtime.js --builddir=obj/threaded-debugger-test-suite --appdir=bin/threaded-debugger-test-suite --asset=threaded-debugger-driver.html threaded-debugger-test.dll
+	ninja -v -C obj/threaded-debugger-test-suite
 	touch $@
 
 build-aot-hello: packager.exe hello.exe
