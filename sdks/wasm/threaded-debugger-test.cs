@@ -4,12 +4,12 @@ using System.Threading;
 public class ThreadTests {
     public static void SleepTest() {
         ServerClass serverObject = new ServerClass();
-        Thread ThreadA = new Thread(serverObject.MethodA);
-        Thread ThreadB = new Thread(serverObject.MethodB);
+        // Thread ThreadA = new Thread(serverObject.MethodA);
+        // Thread ThreadB = new Thread(serverObject.MethodB);
         Thread ThreadC = new Thread(serverObject.MethodC);
 
-        ThreadA.Start();
-        ThreadB.Start();
+        // ThreadA.Start();
+        // ThreadB.Start();
         ThreadC.Start();
         
         Console.WriteLine("main thread ended ");

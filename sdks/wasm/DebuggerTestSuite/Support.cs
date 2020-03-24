@@ -105,8 +105,10 @@ namespace DebuggerTests
 		protected static bool debuggerThreads;
 
 		static string FindTestPath () {
+			Console.WriteLine("threads are enabled", debuggerThreads);
 			//FIXME how would I locate it otherwise?
 			var test_path = Environment.GetEnvironmentVariable ("TEST_SUITE_PATH");
+			Console.WriteLine(test_path);
 			//Lets try to guest
 			if (test_path != null && Directory.Exists (test_path))
 				return test_path;
@@ -120,6 +122,7 @@ namespace DebuggerTests
 			} else {
 				new_path = Path.Combine (cwd, "../../../../bin/debugger-test-suite");
 			}
+
 			if (File.Exists (Path.Combine (new_path, "debugger-driver.html")) ||
 				File.Exists (Path.Combine (new_path, "threaded-debugger-driver.html")))
 				return new_path;
@@ -153,12 +156,11 @@ namespace DebuggerTests
 			throw new Exception ("Could not find an installed Chrome to use");
 		}
 
-		public DebuggerTestBase (string driver = "debugger-driver.html") {
+		public DebuggerTestBase (string driver = "threaded-debugger-driver.html") {
 			startTask = TestHarnessProxy.Start (FindChromePath (), FindTestPath (), driver);
 		}
 
-		public Task Ready (bool threads = false) {
-			debuggerThreads = threads;
+		public Task Ready () {
 			return startTask;
 		}
 			
