@@ -43,6 +43,7 @@ namespace DebuggerTests
         public ThreadedSourceList () {
             Environment.SetEnvironmentVariable("TEST_SUITE_PATH", "../../../../bin/threaded-debugger-test-suite");
         }
+
         void CheckLocation (string script_loc, int line, int column, Dictionary<string, string> scripts, JToken location)
 		{
 			var loc_str = $"{ scripts[location["scriptId"].Value<string>()] }"
@@ -73,7 +74,27 @@ namespace DebuggerTests
             await Ready ();
             await insp.Ready ();
             Assert.Contains ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", scripts.Values);
-			// Assert.Contains ("dotnet://Simple.Dependency.dll/dependency.cs", scripts.Values);
+        }
+
+        [Fact]
+        public async Task CreateGoodBreakpoint () {
+            var insp = new Inspector ();
+
+            var scripts = SubscribeToScripts(insp);
+
+            await Ready();
+            await insp.Ready (async (cli, token) => {
+                ctx = new DebugTestContext (cli, insp, token, scripts);
+                var bp1_res = await SetBreakpoint ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 14, 8, ctx);
+                Assert.Equal ("dotnet:0", bp1_res.Value ["breakpointId"]);                
+                Assert.Equal (1, bp1_res.Value ["locations"]?.Value<JArray> ()?.Count);
+                
+                var loc = bp1_res.Value ["locations"]?.Value<JArray> ()[0];
+                Assert.NotNull (loc ["scriptId"]);
+                Assert.Equal ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", scripts [loc["scriptId"]?.Value<string> ()]);
+                Assert.Equal (14, loc ["lineNumber"]);
+                Assert.Equal (8, loc ["columnNumber"]);
+            });
         }
 
         async Task<Result> SetBreakpoint (string url_key, int line, int column, DebugTestContext ctx, bool expect_ok=true)
@@ -83,10 +104,9 @@ namespace DebuggerTests
                 columnNumber = column,
                 url = dicFileToUrl[url_key],
             });
-
             var bp1_res = await ctx.cli.SendCommand ("Debugger.setBreakpointByUrl", bp1_req, ctx.token);
             Assert.True (expect_ok ? bp1_res.IsOk : bp1_res.IsErr);
-
+            Console.WriteLine("BREAKPOINT SET");
             return bp1_res;
         }
 
@@ -120,17 +140,19 @@ namespace DebuggerTests
                 Console.WriteLine ($"Failed to run command {method} with args: {args?.ToString ()}\nresult: {res.Error.ToString ()}");
                 Assert.True (false, $"SendCommand for {method} failed with {res.Error.ToString ()}");
             }
-
             var wait_res = await ctx.insp.WaitFor(waitForEvent);
-
-            if (script_loc != null)
+            Console.WriteLine("WAIT RES OVER");
+            if (script_loc != null) {
                 CheckLocation (script_loc, line, column, ctx.scripts, wait_res ["callFrames"][0]["location"]);
+            }
 
-            if (wait_for_event_fn != null)
+            if (wait_for_event_fn != null) {
                 await wait_for_event_fn (wait_res);
-
-            if (locals_fn != null)
+            }
+               
+            if (locals_fn != null) {
                 await CheckLocalsOnFrame (wait_res ["callFrames"][0], ctx, locals_fn);
+            }
 
             return wait_res;
         }
@@ -168,20 +190,25 @@ namespace DebuggerTests
         [Fact]
         public async Task CreateBreakpointAndHit () {
             var insp = new Inspector ();
-
             var scripts = SubscribeToScripts(insp);
 
             await Ready();
+            Console.WriteLine("READY 1");
             await insp.Ready (async (cli, token) => {
                 ctx = new DebugTestContext (cli, insp, token, scripts);
 
-                await SetBreakpoint ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 25, 2, ctx);
+                await SetBreakpoint ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 14, 8, ctx);
+
+                var eval_req = JObject.FromObject(new {
+                    expression = "window.setTimeout(function() { sleep-test(); }, 1);",
+                });
 
                 await EvaluateAndCheck (
                     "window.setTimeout(function() { sleep_test(); }, 1);",
-                    "dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 15, 1,
+                    "dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 14, 8,
                     "SleepTest", ctx,
                     wait_for_event_fn: (pause_location) => {
+                        Console.WriteLine("WAIT FOR EVENT");
                         Assert.Equal ("other", pause_location["reason"]?.Value<string> ());
                         Assert.Equal ("dotnet:0", pause_location ["hitBreakpoints"]?[0]?.Value<string> ());
 
@@ -189,6 +216,7 @@ namespace DebuggerTests
                         Assert.Equal ("SleepTest", top_frame ["functionName"].Value<string> ());
                         Assert.Contains ("threaded-debugger-test.cs", top_frame["url"].Value<string> ());
 
+                        CheckLocation ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 4, 33, scripts, top_frame["functionLocation"]);
                         return Task.CompletedTask;
                     }
                 );
