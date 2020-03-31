@@ -29,6 +29,7 @@ namespace DebuggerTests
 				throw new Exception ($"Invalid internal state, waiting for {what} while another wait is already setup");
 			var n = new TaskCompletionSource<JObject> ();
 			notifications [what] = n;
+			Console.WriteLine($"WAIT FOR {what}");
 			return n.Task;
 		}
 
@@ -37,6 +38,7 @@ namespace DebuggerTests
 				throw new Exception ($"Invalid internal state, notifying of {what}, but nobody waiting");
 			notifications [what].SetResult (args);
 			notifications.Remove (what);
+			Console.WriteLine($"NOTIFY OF {what}");
 		}
 
 		public void On(string evtName, Func<JObject, CancellationToken, Task> cb) {
@@ -105,7 +107,6 @@ namespace DebuggerTests
 		protected static bool debuggerThreads;
 
 		static string FindTestPath () {
-			Console.WriteLine("threads are enabled", debuggerThreads);
 			//FIXME how would I locate it otherwise?
 			var test_path = Environment.GetEnvironmentVariable ("TEST_SUITE_PATH");
 			Console.WriteLine(test_path);

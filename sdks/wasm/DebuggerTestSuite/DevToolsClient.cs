@@ -57,21 +57,31 @@ namespace WebAssembly.Net.Debugging {
 
 		async Task<string> ReadOne (CancellationToken token)
 		{
+			
 			byte [] buff = new byte [4000];
 			var mem = new MemoryStream ();
+			
 			while (true) {
+				
+				if (this.socket.State != WebSocketState.Open) {
+					await this.socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
+					return null;
+				}				
+				
+					
 				var result = await this.socket.ReceiveAsync (new ArraySegment<byte> (buff), token);
 				if (result.MessageType == WebSocketMessageType.Close) {
+					await this.socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
 					return null;
 				}
-
 				if (result.EndOfMessage) {
 					mem.Write (buff, 0, result.Count);
 					return Encoding.UTF8.GetString (mem.GetBuffer (), 0, (int)mem.Length);
 				} else {
 					mem.Write (buff, 0, result.Count);
 				}
-			}
+				
+			}			
 		}
 
 		protected void Send (byte [] bytes, CancellationToken token)
@@ -80,7 +90,6 @@ namespace WebAssembly.Net.Debugging {
 			if (pending_writes.Count == 1) {
 				if (current_write != null)
 					throw new Exception ("Internal state is bad. current_write must be null if there are no pending writes");
-
 				current_write = socket.SendAsync (new ArraySegment<byte> (bytes), WebSocketMessageType.Text, true, token);
 				pending_ops.Add (current_write);
 			}

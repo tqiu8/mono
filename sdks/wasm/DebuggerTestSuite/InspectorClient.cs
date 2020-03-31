@@ -20,6 +20,8 @@ namespace WebAssembly.Net.Debugging {
 
 		Task HandleMessage (string msg, CancellationToken token)
 		{
+			// if (msg == null)
+			// 	return null;
 			var res = JObject.Parse (msg);
 			if (res ["id"] == null)
 				DumpProtocol (string.Format("Event method: {0} params: {1}", res ["method"], res ["params"]));
@@ -57,13 +59,12 @@ namespace WebAssembly.Net.Debugging {
 				method = method,
 				@params = args
 			});
-
 			var tcs = new TaskCompletionSource<Result> ();
 			pending_cmds.Add ((id, tcs));
 
 			var str = o.ToString ();
 			//Log ("protocol", $"SendCommand: id: {id} method: {method} params: {args}");
-
+			Console.WriteLine($"COMMAND STR {str}");
 			var bytes = Encoding.UTF8.GetBytes (str);
 			Send (bytes, token);
 			return tcs.Task;
