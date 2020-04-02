@@ -41,7 +41,9 @@ namespace DebuggerTests
 		}
 
 		public ThreadedSourceList () {
-			Environment.SetEnvironmentVariable("TEST_SUITE_PATH", "../../../../bin/threaded-debugger-test-suite");
+			// var cwd = Environment.CurrentDirectory;
+			// var new_path = Path.Combine (cwd, "../../../../bin/threaded-debugger-test-suite");
+			// Environment.SetEnvironmentVariable("TEST_SUITE_PATH", new_path);
 		}
 
 		void CheckLocation (string script_loc, int line, int column, Dictionary<string, string> scripts, JToken location)
@@ -86,14 +88,14 @@ namespace DebuggerTests
 			await Ready();
 			await insp.Ready (async (cli, token) => {
 				ctx = new DebugTestContext (cli, insp, token, scripts);
-				var bp1_res = await SetBreakpoint ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 14, 2, ctx);
+				var bp1_res = await SetBreakpoint ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 5, 2, ctx);
 				Assert.Equal ("dotnet:0", bp1_res.Value ["breakpointId"]);                
 				Assert.Equal (1, bp1_res.Value ["locations"]?.Value<JArray> ()?.Count);
 				
 				var loc = bp1_res.Value ["locations"]?.Value<JArray> ()[0];
 				Assert.NotNull (loc ["scriptId"]);
 				Assert.Equal ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", scripts [loc["scriptId"]?.Value<string> ()]);
-				Assert.Equal (14, loc ["lineNumber"]);
+				Assert.Equal (5, loc ["lineNumber"]);
 				Assert.Equal (2, loc ["columnNumber"]);
 			});
 		}
@@ -212,6 +214,7 @@ namespace DebuggerTests
 						return Task.CompletedTask;
 					},
 					locals_fn: (locals) => {
+						Console.WriteLine(locals);
 						if (test_fn != null)
 							test_fn (locals);
 					}
@@ -246,7 +249,7 @@ namespace DebuggerTests
 						Assert.Equal ("SleepTest", top_frame ["functionName"].Value<string> ());
 						Assert.Contains ("threaded-debugger-test.cs", top_frame["url"].Value<string> ());
 
-						CheckLocation ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 4, 35, scripts, top_frame["functionLocation"]);
+						CheckLocation ("dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 4, 34, scripts, top_frame["functionLocation"]);
 
 						var scope = top_frame ["scopeChain"][0];
 						Assert.Equal ("local", scope["type"]);
@@ -265,14 +268,14 @@ namespace DebuggerTests
 		[Fact]
 		public async Task InspectLocalsAtBreakpointSite () =>
 			await CheckInspectLocalsAtBreakpointSite (
-				"dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 5, 2, "SleepTest",
-				"window.setTimeout(function() { sleep_test(); }, 1);",
+				"dotnet://threaded-debugger-test.dll/threaded-debugger-test.cs", 34, 8, "x",
+				"window.setTimeout(function() { invoke_add(); }, 1);",
 				test_fn: (locals) => {
-					CheckNumber (locals, "count", 30);
+					CheckNumber (locals, "c", 30);
 				} 
 			);
 
-		[Fact]
+		// [Fact]
 		public async Task InspectLocalsDuringSteppingWithSleep () {
 		   var insp = new Inspector ();
 

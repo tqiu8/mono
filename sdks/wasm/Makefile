@@ -652,7 +652,7 @@ run-debugger-tests: build-debugger-test-app build-dbg-testsuite
 	dotnet test DebuggerTestSuite
 
 run-threaded-debugger-tests: build-threaded-debugger-test-app build-dbg-testsuite
-	dotnet test DebuggerTestSuite
+	dotnet test DebuggerTestSuite --filter DisplayName~DebuggerTests.ThreadedSourceList
 
 run-browser-tests: build-browser-test-suite
 	(cd $(BROWSER_TEST) && $(NPM) test)
