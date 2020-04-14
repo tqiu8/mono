@@ -153,5 +153,134 @@ namespace DebuggerTests
 
 		public Task Ready ()
 			=> startTask;
+
+		public void CheckNumber (JToken locals, string name, int value) {
+			foreach (var l in locals) {
+				if (name != l["name"]?.Value<string> ())
+					continue;
+				var val = l["value"];
+				Assert.Equal ("number", val ["type"]?.Value<string> ());
+				Assert.Equal (value, val["value"]?.Value <int> ());
+				return;
+			}
+			Assert.True(false, $"Could not find variable '{name}'");
+		}
+
+		public void CheckString (JToken locals, string name, string value) {
+			foreach (var l in locals) {
+				if (name != l["name"]?.Value<string> ())
+					continue;
+				var val = l["value"];
+				if (value == null) {
+						Assert.Equal ("object", val ["type"]?.Value<string> ());
+						Assert.Equal ("null", val["subtype"]?.Value<string> ());
+				} else {
+						Assert.Equal ("string", val ["type"]?.Value<string> ());
+						Assert.Equal (value, val["value"]?.Value <string> ());
+				}
+				return;
+			}
+			Assert.True(false, $"Could not find variable '{name}'");
+		}
+
+		public void CheckLocation (string script_loc, int line, int column, Dictionary<string, string> scripts, JToken location)
+		{
+			var loc_str = $"{ scripts[location["scriptId"].Value<string>()] }"
+							+ $"#{ location ["lineNumber"].Value<int> () }"
+							+ $"#{ location ["columnNumber"].Value<int> () }";
+
+			var expected_loc_str = $"{script_loc}#{line}#{column}";
+			Assert.Equal (expected_loc_str, loc_str);
+		}
+
+		public JToken GetAndAssertObjectWithName (JToken obj, string name)
+		{
+			var l = obj.FirstOrDefault (jt => jt ["name"]?.Value<string> () == name);
+			if (l == null)
+				Assert.True (false, $"Could not find variable '{name}'");
+			return l;
+		}
+
+		public void CheckFunction (JToken locals, string name, string description, string subtype=null) {
+			Console.WriteLine ($"** Locals: {locals.ToString ()}");
+			foreach (var l in locals) {
+				if (name != l["name"]?.Value<string> ())
+					continue;
+
+				var val = l["value"];
+				Assert.Equal ("function", val ["type"]?.Value<string> ());
+				Assert.Equal (description, val ["description"]?.Value<string> ());
+				Assert.Equal (subtype, val ["subtype"]?.Value<string> ());
+				return;
+			}
+			Assert.True(false, $"Could not find variable '{name}'");
+		}
+
+		public JToken CheckObject (JToken locals, string name, string class_name, string subtype=null, bool is_null=false) {
+			var l = GetAndAssertObjectWithName (locals, name);
+			var val = l["value"];
+			Assert.Equal ("object", val ["type"]?.Value<string> ());
+			Assert.True (val ["isValueType"] == null || !val ["isValueType"].Value<bool> ());
+			Assert.Equal (class_name, val ["className"]?.Value<string> ());
+
+			var has_null_subtype = val ["subtype"] != null && val ["subtype"]?.Value<string> () == "null";
+			Assert.Equal (is_null, has_null_subtype);
+			if (subtype != null)
+				Assert.Equal (subtype, val ["subtype"]?.Value<string> ());
+
+			return l;
+		}
+
+		public JToken CheckBool (JToken locals, string name, bool expected)
+		{
+			var l = GetAndAssertObjectWithName (locals, name);
+			var val = l["value"];
+			Assert.Equal ("boolean", val ["type"]?.Value<string> ());
+			if (val ["value"] == null)
+				Assert.True (false, "expected bool value not found for variable named {name}");
+			Assert.Equal (expected, val ["value"]?.Value<bool> ());
+
+			return l;
+		}
+
+		public void CheckContentValue (JToken token, string value) {
+			var val = token["value"].Value<string> ();
+			Assert.Equal (value, val);
+		}
+
+		public JToken CheckValueType (JToken locals, string name, string class_name) {
+			var l = GetAndAssertObjectWithName (locals, name);
+			var val = l["value"];
+			Assert.Equal ("object", val ["type"]?.Value<string> ());
+			Assert.True (val ["isValueType"] != null && val ["isValueType"].Value<bool> ());
+			Assert.Equal (class_name, val ["className"]?.Value<string> ());
+			return l;
+		}
+
+		public JToken CheckEnum (JToken locals, string name, string class_name, string descr) {
+			var l = GetAndAssertObjectWithName (locals, name);
+			var val = l["value"];
+			Assert.Equal ("object", val ["type"]?.Value<string> ());
+			Assert.True (val ["isEnum"] != null && val ["isEnum"].Value<bool> ());
+			Assert.Equal (class_name, val ["className"]?.Value<string> ());
+			Assert.Equal (descr, val ["description"]?.Value<string> ());
+			return l;
+		}
+
+		public void CheckArray (JToken locals, string name, string class_name) {
+			foreach (var l in locals) {
+				if (name != l["name"]?.Value<string> ())
+					continue;
+
+				var val = l["value"];
+				Assert.Equal ("object", val ["type"]?.Value<string> ());
+				Assert.Equal ("array", val ["subtype"]?.Value<string> ());
+				Assert.Equal (class_name, val ["className"]?.Value<string> ());
+
+				//FIXME: elements?
+				return;
+			}
+			Assert.True(false, $"Could not find variable '{name}'");
+		}
 	}
 } 

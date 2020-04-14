@@ -53,16 +53,6 @@ namespace DebuggerTests
 			Assert.Contains ("dotnet://debugger-test.dll/debugger-datetime-test.cs", scripts.Values);
 		}
 
-		void CheckLocation (string script_loc, int line, int column, Dictionary<string, string> scripts, JToken location)
-		{
-			var loc_str = $"{ scripts[location["scriptId"].Value<string>()] }"
-							+ $"#{ location ["lineNumber"].Value<int> () }"
-							+ $"#{ location ["columnNumber"].Value<int> () }";
-
-			var expected_loc_str = $"{script_loc}#{line}#{column}";
-			Assert.Equal (expected_loc_str, loc_str);
-		}
-
 		async Task<Result> SetBreakpoint (string url_key, int line, int column, bool expect_ok=true)
 		{
 			var bp1_req = JObject.FromObject(new {
@@ -222,30 +212,6 @@ namespace DebuggerTests
 			return wait_res;
 		}
 
-		async Task CheckDateTime (JToken locals, string name, DateTime expected)
-			=> await CheckObjectOnLocals (locals, name,
-				test_fn: (members) => {
-					// not checking everything
-#if false
-					CheckNumber (members, "Year", expected.Year);
-					CheckNumber (members, "Month", expected.Month);
-					CheckNumber (members, "Day", expected.Day);
-					CheckNumber (members, "Hour", expected.Hour);
-					CheckNumber (members, "Minute", expected.Minute);
-					CheckNumber (members, "Second", expected.Second);
-#endif
-
-					CheckString (members, "Year", "int");
-					CheckString (members, "Month", "int");
-					CheckString (members, "Day", "int");
-					CheckString (members, "Hour", "int");
-					CheckString (members, "Minute", "int");
-					CheckString (members, "Second", "int");
-
-					// FIXME: check some float properties too
-				}
-			);
-
 		async Task<JToken> CheckObjectOnLocals (JToken locals, string name, Action<JToken> test_fn)
 		{
 			var obj = locals.Where (jt => jt ["name"]?.Value<string> () == name)
@@ -285,66 +251,38 @@ namespace DebuggerTests
 			return locals;
 		}
 
-		void CheckString (JToken locals, string name, string value) {
-			foreach (var l in locals) {
-				if (name != l["name"]?.Value<string> ())
-					continue;
-				var val = l["value"];
-				if (value == null) {
-						Assert.Equal ("object", val ["type"]?.Value<string> ());
-						Assert.Equal ("null", val["subtype"]?.Value<string> ());
-				} else {
-						Assert.Equal ("string", val ["type"]?.Value<string> ());
-						Assert.Equal (value, val["value"]?.Value <string> ());
+		async Task CheckDateTime (JToken locals, string name, DateTime expected)
+			=> await CheckObjectOnLocals (locals, name,
+				test_fn: (members) => {
+					// not checking everything
+#if false
+					CheckNumber (members, "Year", expected.Year);
+					CheckNumber (members, "Month", expected.Month);
+					CheckNumber (members, "Day", expected.Day);
+					CheckNumber (members, "Hour", expected.Hour);
+					CheckNumber (members, "Minute", expected.Minute);
+					CheckNumber (members, "Second", expected.Second);
+#endif
+
+					CheckString (members, "Year", "int");
+					CheckString (members, "Month", "int");
+					CheckString (members, "Day", "int");
+					CheckString (members, "Hour", "int");
+					CheckString (members, "Minute", "int");
+					CheckString (members, "Second", "int");
+
+					// FIXME: check some float properties too
 				}
-				return;
-			}
-			Assert.True(false, $"Could not find variable '{name}'");
-		}
+			);
 
-		void CheckNumber (JToken locals, string name, int value) {
-			foreach (var l in locals) {
-				if (name != l["name"]?.Value<string> ())
-					continue;
-				var val = l["value"];
-				Assert.Equal ("number", val ["type"]?.Value<string> ());
-				Assert.Equal (value, val["value"]?.Value <int> ());
-				return;
-			}
-			Assert.True(false, $"Could not find variable '{name}'");
-		}
-
-		[Fact]
-		public async Task CheckUSDateTime () {
-			await CheckDateTime ("en-US");
-		}
-
-		[Fact]
-		public async Task CheckESDateTime () {
-			await CheckDateTime ("es-ES");
-		}
-
-		[Fact]
-		public async Task CheckDEDateTime () {
-			await CheckDateTime ("de-DE");
-		}
-
-		[Fact]
-		public async Task CheckJPDateTime () {
-			await CheckDateTime ("ja-JP");
-		}
-
-		[Fact]
-		public async Task CheckGEDateTime () {
-			await CheckDateTime ("ka-GE");
-		}
-
-		[Fact]
-		public async Task CheckHUDateTime () {
-			await CheckDateTime ("hu-HU");
-		}
-
-		public async Task CheckDateTime (string locale) {
+		[Theory]
+		[InlineData ("en-US")]
+		[InlineData ("es-ES")]
+		[InlineData ("de-DE")]
+		[InlineData ("ja-JP")]
+		[InlineData ("ka-GE")]
+		[InlineData ("hu-HU")]
+		public async Task CheckDateTimeLocale (string locale) {
 			var insp = new Inspector ();
 			var scripts = SubscribeToScripts(insp);
 
@@ -353,17 +291,31 @@ namespace DebuggerTests
 				ctx = new DebugTestContext (cli, insp, token, scripts);
 				var debugger_test_loc = "dotnet://debugger-test.dll/debugger-datetime-test.cs";
 
-				await SetBreakpoint (debugger_test_loc, 10, 3);
+				await SetBreakpoint (debugger_test_loc, 20, 3);
 				
 				var pause_location = await EvaluateAndCheck (
 					"window.setTimeout(function() { invoke_static_method ('[debugger-test] DebuggerTests.DateTimeTest:LocaleTest'," 
 					+ $"'{locale}'); }}, 1);",
-					debugger_test_loc, 10, 3, "LocaleTest",
+					debugger_test_loc, 20, 3, "LocaleTest",
 					locals_fn: (locals) => {
 						CultureInfo.CurrentCulture = new CultureInfo (locale, false);
 						DateTime dt = new DateTime (2020, 1, 2, 3, 4, 5);
+						string dt_str = dt.ToString();
 
+						DateTimeFormatInfo dtfi = CultureInfo.GetCultureInfo(locale).DateTimeFormat;
+						var fdtp = dtfi.FullDateTimePattern;
+						var ldp = dtfi.LongDatePattern;
+						var ltp = dtfi.LongTimePattern;
+						var sdp = dtfi.ShortDatePattern;
+						var stp = dtfi.ShortTimePattern;
+
+						CheckString(locals, "fdtp", fdtp);
+						CheckString(locals, "ldp", ldp);
+						CheckString(locals, "ltp", ltp);
+						CheckString(locals, "sdp", sdp);
+						CheckString(locals, "stp", stp);
 						CheckDateTime(locals, "dt", dt);
+						CheckString(locals, "dt_str", dt_str);
 					}
 				);
 				
