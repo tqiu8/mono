@@ -40,6 +40,8 @@ namespace DebuggerTests
 			return dicScriptsIdToUrl;
 		}
 
+		public SourceList(string driver = "debugger-driver.html") : base (driver) {}
+
 		void CheckLocation (string script_loc, int line, int column, Dictionary<string, string> scripts, JToken location)
 		{
 			var loc_str = $"{ scripts[location["scriptId"].Value<string>()] }"
