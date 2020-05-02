@@ -769,7 +769,7 @@ namespace WebAssembly.Net.Debugging {
 
 			var comparer = new SourceLocation.LocationComparer ();
 			// if column is specified the frontend wants the exact matches
-			// and will clear the bp if it isn't close enoug
+			// and will clear the bp if it isn't close enough
 			var locations = store.FindBreakpointLocations (req)
 				.Distinct (comparer)
 				.Where (l => l.Line == req.Line && (req.Column == 0 || l.Column == req.Column))
