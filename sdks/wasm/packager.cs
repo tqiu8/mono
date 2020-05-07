@@ -976,7 +976,7 @@ class Driver {
 		if (enable_aot)
 			ninja.WriteLine ("build $builddir/aot-in: mkdir");
 		{
-			foreach (var file in new string[] { "linker-subs.xml", "linker-disable-collation.xml", "linker-preserves.xml" }) {
+			foreach (var file in new string[] { "linker-subs.xml", "linker-disable-collation.xml" }) {
 				var source_file = Path.GetFullPath (Path.Combine (tool_prefix, "src", file));
 				ninja.WriteLine ($"build $builddir/{file}: cpifdiff {source_file}");
 			}
@@ -1134,7 +1134,7 @@ class Driver {
 				linker_args += "--exclude-feature deserialization ";
 			if (!opts.EnableCollation) {
 				linker_args += "--substitutions linker-disable-collation.xml ";
-				linker_infiles += "linker-disable-collation.xml";
+				linker_infiles += " linker-disable-collation.xml";
 			}
 			if (!string.IsNullOrEmpty (linkDescriptor)) {
 				linker_args += $"-x {linkDescriptor} ";
