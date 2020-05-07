@@ -16,7 +16,7 @@ using System.Globalization;
 namespace DebuggerTests
 {
 	public class DateTimeList : DebuggerTestBase {
-		public DateTimeList() : base ("debugger-locale-driver.html") {}
+		public DateTimeList() : base ("debugger-driver.html") {}
 
 		[Fact]
 		public async Task CheckThatAllLocaleSourcesAreSent () {
