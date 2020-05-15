@@ -150,7 +150,7 @@ namespace DebuggerTests
 
 		public Task Ready ()
 			=> startTask;
-
+		internal string status;
 		internal DebugTestContext ctx;
 		internal Dictionary<string, string> dicScriptsIdToUrl;
 		internal Dictionary<string, string> dicFileToUrl;
