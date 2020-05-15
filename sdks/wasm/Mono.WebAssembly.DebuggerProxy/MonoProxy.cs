@@ -14,7 +14,6 @@ using Microsoft.CodeAnalysis;
 namespace WebAssembly.Net.Debugging {
 
 	internal class MonoProxy : DevToolsProxy {
-		string hi = "hi";
 		HashSet<SessionId> sessions = new HashSet<SessionId> ();
 		Dictionary<SessionId, ExecutionContext> contexts = new Dictionary<SessionId, ExecutionContext> ();
 
