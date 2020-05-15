@@ -8,6 +8,8 @@ using WebAssembly.Net.Debugging;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
+
 
 [assembly: CollectionBehavior (CollectionBehavior.CollectionPerAssembly)]
 
@@ -1251,6 +1253,10 @@ namespace DebuggerTests
 		[Fact]
 		public async Task SetBreakpointBeforeInspectorReady () {
 			var insp = new Inspector ();
+			insp.On("Debugger.breakpointResolved", async (args, c) => { 
+							Console.WriteLine ("BREAKPOINT RESOLVED");
+							events.Add ("breakpointResolved");
+						});
 			
 			var scripts = SubscribeToScripts (insp);
 			await Ready (); 
@@ -1270,42 +1276,29 @@ namespace DebuggerTests
 							insp.WaitFor ("ready"),
 						};
 
-						insp.On("Debugger.breakpointResolved", async (args, c) => { 
-							Console.WriteLine ("BREAKPOINT RESOLVED");
-							event_order.Add ("breakpointResolved");
-						});
-
 						Console.WriteLine ("waiting for the debugger to be ready");
 						await init_cmds[2];
 						Assert.False (scripts.Values.Contains("dotnet://debugger-test.dll/debugger-test.cs"));
-						string url = $"file://{Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.FullName}/debugger-test.cs";
-						Console.WriteLine ("PATH " + url);
 						ctx = new DebugTestContext (client, insp, token, scripts);
-						var bp1_req = JObject.FromObject (new { lineNumber = 5, columnNumber = 2, url = url,});
-						var bp1_res = await ctx.cli.SendCommand ("Debugger.setBreakpointByUrl", bp1_req, ctx.token);
-						Assert.True (true ? bp1_res.IsOk : bp1_res.IsErr);
+						string urlregex = @"^\S+mono\/sdks\/wasm\/debugger-test\.cs$";
+						var bp1_res = await SetBreakpoint (urlregex, 5, 2, use_regex:true);
 						
 						var loc = bp1_res.Value["locations"]?.Value<JArray> ();
 						Assert.Equal (0, loc.Count);
-						 						
 						//after Ready
 						await init_cmds[4];	
 						// Check that scripts have been loaded   
-						Assert.Contains (dicFileToUrl["dotnet://debugger-test.dll/debugger-test.cs"], event_order);
+						Assert.Contains ("dotnet://debugger-test.dll/debugger-test.cs", scripts.Values);
 
 						await EvaluateAndCheck (
 							"window.setTimeout(function() { invoke_add(); }, 1);",
 							"dotnet://debugger-test.dll/debugger-test.cs", 5, 2,
 							"IntAdd",
-							wait_for_event_fn: (pause_location) => {
-								var top_frame = pause_location ["callFrames"][0];
-								Assert.Equal ("IntAdd", top_frame ["functionName"].Value<string>());
-								return Task.CompletedTask;
-							}
+							wait_for_event_fn: null
 						);
-						Assert.Contains ("breakpointResolved", event_order);
-						var script_ix = event_order.IndexOf (dicFileToUrl["dotnet://debugger-test.dll/debugger-test.cs"]);
-						var resolve_ix = event_order.IndexOf ("breakpointResolved");
+						Assert.Contains ("breakpointResolved", events);
+						var script_ix = events.IndexOf ($"Debugger.scriptParsed {dicFileToUrl["dotnet://debugger-test.dll/debugger-test.cs"]}");
+						var resolve_ix = events.IndexOf ("breakpointResolved");
 						
 						// check breakpoint resolved after script is loaded
 						Assert.True (script_ix < resolve_ix);
@@ -1317,69 +1310,33 @@ namespace DebuggerTests
 		}
 
 		[Fact]
-		public async Task SetBreakpointAfterInspectorReady () {
+		public async Task SetBreakpointAfterReadyNoBreakpointResolvedEventSent () {
 			var insp = new Inspector ();
 
 			var scripts = SubscribeToScripts (insp);
 			await Ready (); 
-			
-			using (var cts = new CancellationTokenSource()) {
-				cts.CancelAfter (60 * 1000);
-				var uri = new Uri ($"ws://{TestHarnessProxy.Endpoint.Authority}/launch-chrome-and-connect");
-				using var loggerFactory = LoggerFactory.Create(
-					builder => builder.AddConsole().AddFilter(null, LogLevel.Trace));
-				using (var client = new InspectorClient (loggerFactory.CreateLogger<Inspector>())) {
-					await client.Connect (uri, insp.OnMessage, async token => {
-						Task[] init_cmds = {
-							client.SendCommand ("Profiler.enable", null, token),
-							client.SendCommand ("Runtime.enable", null, token),
-							client.SendCommand ("Debugger.enable", null, token),
-							client.SendCommand ("Runtime.runIfWaitingForDebugger", null, token),
-							insp.WaitFor ("ready"),
-						};
-						
-						insp.On("Debugger.breakpointResolved", async (args, c) => { 
-							Console.WriteLine ("BREAKPOINT RESOLVED");
-							event_order.Add ("breakpointResolved");
-						});
 
-						Console.WriteLine ("waiting for the debugger to be ready");
+			await insp.Ready (async (cli, token) => {
+				var bp_res = await SetBreakpoint ("dotnet://debugger-test.dll/debugger-test.cs", 5, 2, expect_ok:true);
+				
+				Assert.Contains ("dotnet://debugger-test.dll/debugger-test.cs", scripts.Values);
+				var loc = bp_res.Value["locations"]?.Value<JArray> ();
 
-						// after inspector is ready
-						await init_cmds[4];
+				await EvaluateAndCheck (
+					"window.setTimeout(function() { invoke_add(); }, 1);",
+					"dotnet://debugger-test.dll/debugger-test.cs", 5, 2,
+					"IntAdd",
+					wait_for_event_fn: (pause_location) => {
+						var top_frame = pause_location ["callFrames"][0];
+						Assert.Equal ("IntAdd", top_frame ["functionName"].Value<string>());
+						return Task.CompletedTask;
+					}
+				);
 
-						// check that script is loaded
-						Assert.Contains (dicFileToUrl["dotnet://debugger-test.dll/debugger-test.cs"], event_order);
-						
-						ctx = new DebugTestContext (client, insp, token, scripts);
-
-						// set breakpoint
-						var bp1_req = JObject.FromObject (new { lineNumber = 5, columnNumber = 2, url = dicFileToUrl["dotnet://debugger-test.dll/debugger-test.cs"],});
-						var bp1_res = await ctx.cli.SendCommand ("Debugger.setBreakpointByUrl", bp1_req, ctx.token);
-						Assert.True (true ? bp1_res.IsOk : bp1_res.IsErr);
-
-						var loc = bp1_res.Value["locations"]?.Value<JArray> ();
-
-						// check breakpoint was successfully set
-						Assert.Equal (1, loc.Count);
-
-						await EvaluateAndCheck (
-							"window.setTimeout(function() { invoke_add(); }, 1);",
-							"dotnet://debugger-test.dll/debugger-test.cs", 5, 2,
-							"IntAdd",
-							wait_for_event_fn: (pause_location) => {
-								var top_frame = pause_location ["callFrames"][0];
-								Assert.Equal ("IntAdd", top_frame ["functionName"].Value<string>());
-								return Task.CompletedTask;
-							}
-						);
-
-						// no breakpoint is resolved
-						Assert.True (!event_order.Contains("breakpointResolved"));
-					}, cts.Token);
-					await client.Close (cts.Token);
-				}
-			};
+				// check breakpoint was successfully set
+				Assert.Equal (1, loc.Count);
+				Assert.True (!events.Contains("breakpointResolved"));
+			});
 		}
 
 		//

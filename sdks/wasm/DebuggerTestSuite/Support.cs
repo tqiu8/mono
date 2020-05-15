@@ -158,7 +158,7 @@ namespace DebuggerTests
 		internal Dictionary<string, string> SubscribeToScripts (Inspector insp) {
 			dicScriptsIdToUrl = new Dictionary<string, string> ();
 			dicFileToUrl = new Dictionary<string, string>();
-			event_order = new List<string>();
+			events = new List<string>();
 			insp.On("Debugger.scriptParsed", async (args, c) => {
 				var script_id = args? ["scriptId"]?.Value<string> ();
 				var url = args["url"]?.Value<string> ();
@@ -169,7 +169,7 @@ namespace DebuggerTests
 					dbgUrl = arrStr[0] + "/" + arrStr[1] + "/" + arrStr[2] + "/" + arrStr[arrStr.Length - 1];
 					dicScriptsIdToUrl[script_id] = dbgUrl;
 					dicFileToUrl[dbgUrl] = args["url"]?.Value<string>();
-					event_order.Add(dicFileToUrl[dbgUrl]);
+					events.Add($"Debugger.scriptParsed {dicFileToUrl[dbgUrl]}");
 				} else if (!String.IsNullOrEmpty (url)) {
 					dicFileToUrl[new Uri (url).AbsolutePath] = url;
 				}
