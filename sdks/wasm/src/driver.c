@@ -13,15 +13,7 @@
 #include <mono/utils/mono-dl-fallback.h>
 #include <mono/jit/jit.h>
 
-#ifdef GEN_PINVOKE
-#include "pinvoke-table.h"
-#else
-#ifdef ENABLE_NETCORE
-#include "pinvoke-tables-default-netcore.h"
-#else
-#include "pinvoke-tables-default.h"
-#endif
-#endif
+#include "pinvoke.h"
 
 #ifdef CORE_BINDINGS
 void core_initialize_internals ();
@@ -31,7 +23,7 @@ void core_initialize_internals ();
 extern void* mono_wasm_invoke_js_marshalled (MonoString **exceptionMessage, void *asyncHandleLongPtr, MonoString *funcName, MonoString *argsJson);
 extern void* mono_wasm_invoke_js_unmarshalled (MonoString **exceptionMessage, MonoString *funcName, void* arg0, void* arg1, void* arg2);
 
-void mono_wasm_enable_debugging (void);
+void mono_wasm_enable_debugging (int);
 
 void mono_ee_interp_init (const char *opts);
 void mono_marshal_ilgen_init (void);
@@ -69,6 +61,13 @@ void mono_trace_init (void);
 #define g_new0(type, size) ((type *) calloc (sizeof (type), (size)))
 
 static MonoDomain *root_domain;
+
+void
+mono_wasm_printerr (const char *message)
+{
+	fprintf (stderr, "%s\n", message);
+	fflush (stderr);
+}
 
 static MonoString*
 mono_wasm_invoke_js (MonoString *str, int *is_exception)
@@ -172,10 +171,9 @@ static void *sysglobal_native_handle;
 static void*
 wasm_dl_load (const char *name, int flags, char **err, void *user_data)
 {
-	for (int i = 0; i < sizeof (pinvoke_tables) / sizeof (void*); ++i) {
-		if (!strcmp (name, pinvoke_names [i]))
-			return pinvoke_tables [i];
-	}
+	void* handle = wasm_dl_lookup_pinvoke_table (name);
+	if (handle)
+		return handle;
 
 #ifdef ENABLE_NETCORE
 	if (!strcmp (name, "System.Globalization.Native"))
@@ -187,17 +185,6 @@ wasm_dl_load (const char *name, int flags, char **err, void *user_data)
 #endif
 
 	return NULL;
-}
-
-static mono_bool
-wasm_dl_is_pinvoke_tables (void* handle)
-{
-	for (int i = 0; i < sizeof (pinvoke_tables) / sizeof (void*); ++i) {
-		if (pinvoke_tables [i] == handle) {
-			return 1;
-		}
-	}
-	return 0;
 }
 
 static void*
@@ -216,8 +203,14 @@ wasm_dl_symbol (void *handle, const char *name, char **err, void *user_data)
 
 	PinvokeImport *table = (PinvokeImport*)handle;
 	for (int i = 0; table [i].name; ++i) {
-		if (!strcmp (table [i].name, name))
+		if (!strcmp (table [i].name, name)) {
+			if (table [i].func == mono_wasm_pinvoke_vararg_stub) {
+				fprintf (stderr, "PInvoke method '%s' has multiple conflicting declarations. PInvokes with varargs are not supported.\n", table [i].name);
+				fflush (stderr);
+				exit (1);
+			}
 			return table [i].func;
+		}
 	}
 	return NULL;
 }
@@ -229,7 +222,6 @@ int SystemNative_CreateNetworkChangeListenerSocket (int a) { return 0; }
 void SystemNative_ReadEvents (int a,int b) {}
 int SystemNative_SchedGetAffinity (int a,int b) { return 0; }
 int SystemNative_SchedSetAffinity (int a,int b) { return 0; }
-int getgrouplist (int a,int b,int c,int d) { return 0; }
 #endif
 
 #if !defined(ENABLE_AOT) || defined(EE_MODE_LLVMONLY_INTERP)
@@ -313,6 +305,7 @@ icall_table_lookup_symbol (void *func)
 void mono_initialize_internals ()
 {
 	mono_add_internal_call ("WebAssembly.Runtime::InvokeJS", mono_wasm_invoke_js);
+	// TODO: what happens when two types in different assemblies have the same FQN?
 
 	// Blazor specific custom routines - see dotnet_support.js for backing code
 	mono_add_internal_call ("WebAssembly.JSInterop.InternalCalls::InvokeJSMarshalled", mono_wasm_invoke_js_marshalled);
@@ -327,6 +320,8 @@ void mono_initialize_internals ()
 EMSCRIPTEN_KEEPALIVE void
 mono_wasm_load_runtime (const char *managed_path, int enable_debugging)
 {
+	const char *interp_opts = "";
+
 	monoeg_g_setenv ("MONO_LOG_LEVEL", "debug", 0);
 	monoeg_g_setenv ("MONO_LOG_MASK", "gc", 0);
 #ifdef ENABLE_NETCORE
@@ -347,8 +342,11 @@ mono_wasm_load_runtime (const char *managed_path, int enable_debugging)
 #endif
 #else
 	mono_jit_set_aot_mode (MONO_AOT_MODE_INTERP_LLVMONLY);
-	if (enable_debugging)
-		mono_wasm_enable_debugging ();
+	if (enable_debugging) {
+		// Disable optimizations which interfere with debugging
+		interp_opts = "-all";
+		mono_wasm_enable_debugging (enable_debugging);
+	}
 #endif
 
 #ifdef LINK_ICALLS
@@ -366,7 +364,7 @@ mono_wasm_load_runtime (const char *managed_path, int enable_debugging)
 	mono_icall_table_init ();
 #endif
 #ifdef NEED_INTERP
-	mono_ee_interp_init ("");
+	mono_ee_interp_init (interp_opts);
 	mono_marshal_ilgen_init ();
 	mono_method_builder_ilgen_init ();
 	mono_sgen_mono_ilgen_init ();
@@ -732,4 +730,28 @@ EMSCRIPTEN_KEEPALIVE void
 mono_wasm_enable_on_demand_gc (void)
 {
 	mono_wasm_enable_gc = 1;
+}
+
+// Returns the local timezone default is UTC.
+EM_JS(size_t, mono_wasm_timezone_get_local_name, (),
+{
+	var res = "UTC";
+	try {
+		res = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	} catch(e) {}
+
+	var buff = Module._malloc((res.length + 1) * 2);
+	stringToUTF16 (res, buff, (res.length + 1) * 2);
+	return buff;
+})
+
+void
+mono_timezone_get_local_name (MonoString **result)
+{
+	// WASM returns back an int pointer to a string UTF16 buffer.
+	// We then cast to `mono_unichar2*`.  Returning `mono_unichar2*` from the JavaScript call will
+	// result in cast warnings from the compiler.
+	mono_unichar2 *tzd_local_name = (mono_unichar2*)mono_wasm_timezone_get_local_name ();
+	*result = mono_string_from_utf16 (tzd_local_name);
+	free (tzd_local_name);
 }

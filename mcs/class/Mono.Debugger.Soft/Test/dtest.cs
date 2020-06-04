@@ -65,9 +65,6 @@ public class DebuggerTests
 	Event GetNextEvent () {
 		var es = vm.GetNextEventSet ();
 		Assert.AreEqual (1, es.Events.Length);
-		if (step_req != null && es [0] != null && es [0].Request != null && es [0].Request is StepEventRequest && ((StepEventRequest)es [0].Request).GetId() != step_req.GetId()) {
-			step_req = ((StepEventRequest)es [0].Request);
-		}
 		return es [0];
 	}
 
@@ -5295,6 +5292,37 @@ public class DebuggerTests
 		if (failMessage != null)
 			Assert.Fail (failMessage);
 	}
+
+	[Test]
+	public void Frame_SetValue_WithList () {
+		Event e = run_until ("frame_setvalue_withlist");
+		var req = create_step (e);
+		req.Enable ();
+
+		e = step_once ();
+		e = step_over ();
+		e = step_over ();		
+		e = step_over ();				
+		e = step_over ();			
+		e = step_over ();				
+		e = step_over ();				
+			
+		StackFrame frame = e.Thread.GetFrames () [0];
+		var l = frame.Method.GetLocal ("someLocalString");
+		var l1 = frame.Method.GetLocal ("aList");
+		TypeMirror t = l1.Type;
+		var m = t.GetMethod ("get_Count");
+		var contentOrig1 =  frame.GetValue (l1);	
+		var v = (contentOrig1 as ObjectMirror).InvokeMethod (e.Thread, m, null);
+		var contentOrig =  frame.GetValue (l);					
+		var str = vm.RootDomain.CreateString ("test1");
+		frame.SetValue (l, str);
+		contentOrig =  frame.GetValue (l);		
+		e.Thread.GetFrames ();
+		contentOrig =  frame.GetValue (l);		
+		AssertValue ("test1", contentOrig);
+	}
+
 #endif
 } // class DebuggerTests
 } // namespace
